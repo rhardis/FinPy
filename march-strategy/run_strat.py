@@ -22,7 +22,7 @@ class securityData:
         
 
 
-def main():
+def main(start_date=None, end_date=None):
     # 1. Create an instance of the securityData class
     sd = securityData()
     
@@ -32,7 +32,15 @@ def main():
     for ticker in sd.tickers:
         print(ticker)
         tlist.append(ticker)
-        tvalues.append(calculate_stochastic(ticker, sd.macd_window, sd.stoch_window))
+        
+        ticker_data = get_ticker_data(ticker, 'weekly', '0')
+        if start_date and end_date:
+            try:
+                ticker_data = constrain_df(ticker_data)
+            except:
+                print('Invalid dates.  Try a later start date')
+        
+        tvalues.append(calculate_stochastic(ticker_data, sd.macd_window, sd.stoch_window))
         
     
     # 3. Combine all results into a single dataframe
@@ -61,24 +69,31 @@ def main():
     for email in distribution_list:
         email_blast(email, subject, message)
 
+      
+def constrain_data(df, start_date, end_date):
+    df = df[df.index > 0 and df.index < 10]
     
+    return df
+
+
+def get_ticker_data(ticker, pull_type, interval='0'):
+    ticker_df = pull_data(ticker, pull_type, interval=interval)
     
-    
-def calculate_stochastic(ticker, macd_args, stoch_args):
+    return ticker_df
+
+
+def calculate_stochastic(ticker_df, macd_args, stoch_args):
     """
     Calculates the stochastic value of the provided ticker and returns a list with ticker name and value
     
     Args:
-        ticker (string): the acronym representing the ticker to look up
+        ticker_df (pd.DataFrame): dataframe containing price and volume data about a ticker symbol
         macd_args (list): a list of the three macd values
         stoch_args (list): a list of the three stochastic values
         
     Returns:
         stoch_val (float): the numeric value of the stochastic
     """
-    
-    pull_type = 'weekly'
-    ticker_df = pull_data(ticker, pull_type, interval='0')
     
     # Get the MACD dataframe
     df_macd = create_macd(ticker_df, *macd_args)
