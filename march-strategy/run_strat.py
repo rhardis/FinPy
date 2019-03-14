@@ -101,6 +101,7 @@ def get_ticker_data(ticker, pull_type, interval='0'):
     while not df_flag and count < 10:
         try:
             ticker_df = pull_data(ticker, pull_type, interval=interval)
+            ticker_df = ticker_df.iloc[-10:,:]
             df_flag = True
         except KeyError:
             print('Pulled Too Soon!  Wait 2 seconds')
@@ -110,8 +111,18 @@ def get_ticker_data(ticker, pull_type, interval='0'):
         
     if not df_flag:
         ticker_df = pd.DataFrame()
+        
+    ticker_df = convert_str_to_dt(ticker_df)
     
     return ticker_df
+
+
+def convert_str_to_dt(df):
+    print(len(df.index))
+    for row in range(len(df.index)):
+        df.DT[row] = dt.strptime(df.DT[row], '%Y-%m-%d')
+    
+    return df
 
 
 def calculate_stochastic(ticker_df, macd_args, stoch_args):
