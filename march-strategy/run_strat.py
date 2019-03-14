@@ -36,12 +36,12 @@ class securityData:
             
         symbol_list = []
         symbol_list = df.Symbol
-        symbol_list = symbol_list[:1]
+        #symbol_list = symbol_list[:1]
             
         return symbol_list
     
 
-def main(start_date=None, end_date=None):
+def main(start_date=None, end_date=None, send_email=False):
     # 1. Create an instance of the securityData class
     sd = securityData()
     
@@ -55,11 +55,17 @@ def main(start_date=None, end_date=None):
         ticker_data = get_ticker_data(ticker, 'daily', '0')
         if start_date and end_date:
             try:
-                ticker_data = constrain_data(ticker_data, start_date, end_date)
+                prior_data = constrain_data(ticker_data, None, start_date)
+                post_data = constrain_data(ticker_data, start_date, end_date)
+                tvalues.append(calculate_stochastic(prior_data, sd.macd_window, sd.stoch_window))
             except:
                 print('Invalid dates.  Try a later start date')
+        else:
+            try:
+                tvalues.append(calculate_stochastic(ticker_data, sd.macd_window, sd.stoch_window))
+            except:
+                print('there was an error in calculating the stochastic')
         
-        tvalues.append(calculate_stochastic(ticker_data, sd.macd_window, sd.stoch_window))
         
     
     # 3. Combine all results into a single dataframe
@@ -95,13 +101,18 @@ def main(start_date=None, end_date=None):
         
     print(message)
     
-    for email in distribution_list:
-        print('emailing to {}'.format(email)) 
-        #email_blast(email, subject, message)
+    if send_email:
+        for email in distribution_list:
+            print('emailing to {}'.format(email)) 
+            email_blast(email, subject, message)
 
       
 def constrain_data(df, start_date, end_date):
-    df = df[df.DT < end_date]
+    if end_date:
+        df = df[df.DT <= end_date]
+    
+    if start_date:
+        df = df[df.DT >= start_date]
 
     return df
 
@@ -112,7 +123,7 @@ def get_ticker_data(ticker, pull_type, interval='0'):
     while not df_flag and count < 10:
         try:
             ticker_df = pull_data(ticker, pull_type, interval=interval)
-            ticker_df = ticker_df.iloc[-500:,:]
+            ticker_df = ticker_df.iloc[:,:]
             df_flag = True
         except KeyError:
             print('Pulled Too Soon!  Wait 2 seconds')
@@ -159,10 +170,10 @@ def calculate_stochastic(ticker_df, macd_args, stoch_args):
     
     df_macd['K_200'] = (df_macd.signal - min_val) / (max_val - min_val) * 100
     K_Full = np.mean(df_macd.K_200[-stoch_args[1]:])
-    print(K_Full)
+    #print(K_Full)
     
     D_Avg = np.mean(df_macd.K_200[-stoch_args[2]:])
-    print(D_Avg)
+    #print(D_Avg)
     
     stoch_val = K_Full
     
@@ -238,4 +249,4 @@ def pull_data(ticker,pullType,interval='0',key='1RJDU8R6RESLVE09'):
 
 
 if __name__ == '__main__':
-    main()
+    main(send_email=False)
