@@ -7,6 +7,8 @@ Created on Thu Feb 28 20:37:23 2019
 import numpy as np
 import pandas as pd
 import smtplib
+import time
+
 from datetime import datetime as dt
 
 from alpha_vantage.timeseries import TimeSeries
@@ -16,7 +18,8 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 
 class securityData:
     def __init__(self):
-        self.tickers = ['spy','khc','ba','mmm','xlu','xlk','xlf','xlb','iwm','qqq','xlv','bsbr','enia','hpq','kdp']
+        #self.tickers = ['spy','khc','ba','mmm','xlu','xlk','xlf','xlb','iwm','qqq','xlv','bsbr','enia','hpq','kdp']
+        self.tickers = self.get_tickers_from_csv(['C:\\Users\\Richard Hardis\\Documents\\GitHub\\FinPy\\march-strategy\\symbol_list_NYSE.csv'])
         self.macd_window = [5,15,3]
         self.stoch_window = [200,3,7]
         self.buy_criteria = 5
@@ -25,6 +28,17 @@ class securityData:
         self.K_window = 3
         self.D_window = 7
 
+    
+    def get_tickers_from_csv(self, csv_list):
+        for csv in csv_list:
+            df = pd.read_csv(csv)
+            
+        symbol_list = []
+        symbol_list = df.Symbol
+        symbol_list = symbol_list[:5]
+            
+        return symbol_list
+    
 
 def main(start_date=None, end_date=None):
     # 1. Create an instance of the securityData class
@@ -37,7 +51,7 @@ def main(start_date=None, end_date=None):
         print(ticker)
         tlist.append(ticker)
         
-        ticker_data = get_ticker_data(ticker, 'weekly', '0')
+        ticker_data = get_ticker_data(ticker, 'daily', '0')
         if start_date and end_date:
             try:
                 ticker_data = constrain_df(ticker_data)
@@ -57,7 +71,7 @@ def main(start_date=None, end_date=None):
     
     # 5. Send an email containing the list of all of the securities that match the criteria
     distribution_list = ['richardphardis@gmail.com','samkest419@gmail.com']
-    subject = 'Buy signals for the week of {}'.format(dt.now())
+    subject = 'Buy signals for the day of {}'.format(dt.now())
     
     message = ''
     for item in combined_series_buy.index:
@@ -71,7 +85,7 @@ def main(start_date=None, end_date=None):
     print(message)
     
     for email in distribution_list:
-        print('emailing')
+        print('emailing to {}'.format(email)) 
         #email_blast(email, subject, message)
 
       
@@ -82,7 +96,20 @@ def constrain_data(df, start_date, end_date):
 
 
 def get_ticker_data(ticker, pull_type, interval='0'):
-    ticker_df = pull_data(ticker, pull_type, interval=interval)
+    df_flag = False
+    count = 0
+    while not df_flag and count < 10:
+        try:
+            ticker_df = pull_data(ticker, pull_type, interval=interval)
+            df_flag = True
+        except KeyError:
+            print('Pulled Too Soon!  Wait 2 seconds')
+            time.sleep(2)
+            
+        count += 1
+        
+    if not df_flag:
+        ticker_df = pd.DataFrame()
     
     return ticker_df
 
