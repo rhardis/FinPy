@@ -16,7 +16,7 @@ def calculate_return(df, buy_date, period):
     df = df.copy(deep=True)
     df.reset_index(inplace=True)
     sell_date = buy_date + timedelta(days=period)
-    if sell_date > df.DT.iloc[-1]:
+    if (sell_date - df.DT.iloc[-1]).days > 0:
         print('end date out of range')
         net_return = np.nan
     else:
@@ -30,8 +30,9 @@ def calculate_return(df, buy_date, period):
     
     return [sell_date, net_return]
 
+start_time = datetime.now()
 
-start_date = datetime(2018, 8, 15)
+start_date = datetime(1999, 1, 1)  # Change this line to change the start date you want to use. (Year, Month, Day)
 end_date = datetime.now()
 days_until_sale = 10
 #delta_dates = end_date - start_date
@@ -41,8 +42,8 @@ days_until_sale = 10
 
 sd = rs.securityData()
 greater_df_list = []
-temp_list = ['SPY', 'MCK', 'AAPL']
-for ticker in temp_list: # this is normally ticker in sd.tickers to get all tickers on NYSE
+temp_list = ['SPY','MCK','AAPL']
+for ticker in sd.tickers[:500]: # this is normally ticker in sd.tickers to get all tickers on NYSE
     print(ticker)
     unconstrained_data = rs.get_ticker_data(ticker, 'daily', '0')
     dates_df = unconstrained_data[(unconstrained_data.DT >= start_date) & (unconstrained_data.DT <= end_date)]
@@ -69,6 +70,10 @@ returns_df = pd.DataFrame(greater_df_list, columns=['ticker','buy_date','stochas
 returns_df = returns_df[returns_df.sell_date != 'Sell_Signal']
 returns_df.to_csv('returns_summary.csv')
             
+end_time = datetime.now()
+
+elapsed_time = end_time - start_time
+print(elapsed_time)
         
         
     
