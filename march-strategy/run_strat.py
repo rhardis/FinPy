@@ -7,7 +7,10 @@ Created on Thu Feb 28 20:37:23 2019
 import numpy as np
 import pandas as pd
 import smtplib
+import time
+
 from datetime import datetime as dt
+from datetime import timedelta as td
 
 from alpha_vantage.timeseries import TimeSeries
 
@@ -16,7 +19,8 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 
 class securityData:
     def __init__(self):
-        self.tickers = ['spy','khc','ba','mmm','xlu','xlk','xlf','xlb','iwm','qqq','xlv','bsbr','enia','hpq','kdp']
+        #self.tickers = ['spy','khc','ba','mmm','xlu','xlk','xlf','xlb','iwm','qqq','xlv','bsbr','enia','hpq','kdp']
+        self.tickers = self.get_tickers_from_csv(['C:\\Users\\Richard Hardis\\Documents\\GitHub\\FinPy\\march-strategy\\symbol_list_NYSE.csv'])
         self.macd_window = [5,15,3]
         self.stoch_window = [200,3,7]
         self.buy_criteria = 5
@@ -25,8 +29,19 @@ class securityData:
         self.K_window = 3
         self.D_window = 7
 
+    
+    def get_tickers_from_csv(self, csv_list):
+        for csv in csv_list:
+            df = pd.read_csv(csv)
+            
+        symbol_list = []
+        symbol_list = df.Symbol
+        #symbol_list = symbol_list[:1]
+            
+        return symbol_list
+    
 
-def main(start_date=None, end_date=None):
+def main(start_date=None, end_date=None, send_email=False):
     # 1. Create an instance of the securityData class
     sd = securityData()
     
@@ -37,14 +52,20 @@ def main(start_date=None, end_date=None):
         print(ticker)
         tlist.append(ticker)
         
-        ticker_data = get_ticker_data(ticker, 'weekly', '0')
+        ticker_data = get_ticker_data(ticker, 'daily', '0')
         if start_date and end_date:
             try:
-                ticker_data = constrain_df(ticker_data)
+                prior_data = constrain_data(ticker_data, None, start_date)
+                post_data = constrain_data(ticker_data, start_date, end_date)
+                tvalues.append(calculate_stochastic(prior_data, sd.macd_window, sd.stoch_window))
             except:
                 print('Invalid dates.  Try a later start date')
+        else:
+            try:
+                tvalues.append(calculate_stochastic(ticker_data, sd.macd_window, sd.stoch_window))
+            except:
+                print('there was an error in calculating the stochastic')
         
-        tvalues.append(calculate_stochastic(ticker_data, sd.macd_window, sd.stoch_window))
         
     
     # 3. Combine all results into a single dataframe
@@ -55,9 +76,19 @@ def main(start_date=None, end_date=None):
     combined_series_buy = combined_series[combined_series < sd.buy_criteria]
     combined_series_sell = combined_series[combined_series > sd.sell_criteria]
     
+    print('buy:')
+    for item in combined_series_buy:
+        print(item)
+        
+    print('sell:')
+    for item in combined_series_sell:
+        print(item)
+        
+        
+    
     # 5. Send an email containing the list of all of the securities that match the criteria
     distribution_list = ['richardphardis@gmail.com','samkest419@gmail.com']
-    subject = 'Buy signals for the week of {}'.format(dt.now())
+    subject = 'Buy signals for the day of {}'.format(dt.now())
     
     message = ''
     for item in combined_series_buy.index:
@@ -70,21 +101,49 @@ def main(start_date=None, end_date=None):
         
     print(message)
     
-    for email in distribution_list:
-        print('emailing')
-        #email_blast(email, subject, message)
+    if send_email:
+        for email in distribution_list:
+            print('emailing to {}'.format(email)) 
+            email_blast(email, subject, message)
 
       
 def constrain_data(df, start_date, end_date):
-    df = df[df.index > 0 and df.index < 10]
+    if end_date:
+        df = df[df.DT <= end_date]
     
+    if start_date:
+        df = df[df.DT >= start_date]
+
     return df
 
 
 def get_ticker_data(ticker, pull_type, interval='0'):
-    ticker_df = pull_data(ticker, pull_type, interval=interval)
+    df_flag = False
+    count = 0
+    while not df_flag and count < 10:
+        try:
+            ticker_df = pull_data(ticker, pull_type, interval=interval)
+            ticker_df = ticker_df.iloc[:,:]
+            df_flag = True
+        except KeyError:
+            print('Pulled Too Soon!  Wait 2 seconds')
+            time.sleep(2)
+            
+        count += 1
+        
+    if not df_flag:
+        ticker_df = pd.DataFrame()
+        
+    ticker_df = convert_str_to_dt(ticker_df)
     
     return ticker_df
+
+
+def convert_str_to_dt(df):
+    for row in range(len(df.index)):
+        df.DT[row] = dt.strptime(df.DT[row], '%Y-%m-%d')
+    
+    return df
 
 
 def calculate_stochastic(ticker_df, macd_args, stoch_args):
@@ -111,10 +170,10 @@ def calculate_stochastic(ticker_df, macd_args, stoch_args):
     
     df_macd['K_200'] = (df_macd.signal - min_val) / (max_val - min_val) * 100
     K_Full = np.mean(df_macd.K_200[-stoch_args[1]:])
-    print(K_Full)
+    #print(K_Full)
     
     D_Avg = np.mean(df_macd.K_200[-stoch_args[2]:])
-    print(D_Avg)
+    #print(D_Avg)
     
     stoch_val = K_Full
     
@@ -190,4 +249,4 @@ def pull_data(ticker,pullType,interval='0',key='1RJDU8R6RESLVE09'):
 
 
 if __name__ == '__main__':
-    main()
+    main(send_email=False)
