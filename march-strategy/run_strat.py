@@ -10,6 +10,7 @@ import smtplib
 import time
 
 from datetime import datetime as dt
+from datetime import timedelta as td
 
 from alpha_vantage.timeseries import TimeSeries
 
@@ -35,7 +36,7 @@ class securityData:
             
         symbol_list = []
         symbol_list = df.Symbol
-        symbol_list = symbol_list[:5]
+        symbol_list = symbol_list[:1]
             
         return symbol_list
     
@@ -54,7 +55,7 @@ def main(start_date=None, end_date=None):
         ticker_data = get_ticker_data(ticker, 'daily', '0')
         if start_date and end_date:
             try:
-                ticker_data = constrain_df(ticker_data)
+                ticker_data = constrain_data(ticker_data, start_date, end_date)
             except:
                 print('Invalid dates.  Try a later start date')
         
@@ -68,6 +69,16 @@ def main(start_date=None, end_date=None):
     # 4. Filter the Series based on our desired cutoff values.
     combined_series_buy = combined_series[combined_series < sd.buy_criteria]
     combined_series_sell = combined_series[combined_series > sd.sell_criteria]
+    
+    print('buy:')
+    for item in combined_series_buy:
+        print(item)
+        
+    print('sell:')
+    for item in combined_series_sell:
+        print(item)
+        
+        
     
     # 5. Send an email containing the list of all of the securities that match the criteria
     distribution_list = ['richardphardis@gmail.com','samkest419@gmail.com']
@@ -90,8 +101,8 @@ def main(start_date=None, end_date=None):
 
       
 def constrain_data(df, start_date, end_date):
-    df = df[df.index > 0 and df.index < 10]
-    
+    df = df[df.DT < end_date]
+
     return df
 
 
@@ -101,7 +112,7 @@ def get_ticker_data(ticker, pull_type, interval='0'):
     while not df_flag and count < 10:
         try:
             ticker_df = pull_data(ticker, pull_type, interval=interval)
-            ticker_df = ticker_df.iloc[-10:,:]
+            ticker_df = ticker_df.iloc[-500:,:]
             df_flag = True
         except KeyError:
             print('Pulled Too Soon!  Wait 2 seconds')
@@ -118,7 +129,6 @@ def get_ticker_data(ticker, pull_type, interval='0'):
 
 
 def convert_str_to_dt(df):
-    print(len(df.index))
     for row in range(len(df.index)):
         df.DT[row] = dt.strptime(df.DT[row], '%Y-%m-%d')
     
