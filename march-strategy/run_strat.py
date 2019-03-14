@@ -16,7 +16,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 
 class securityData:
     def __init__(self):
-        self.tickers = ['spy','khc','ba','xlu','xlk']
+        self.tickers = ['spy','khc','ba','mmm','xlu','xlk','xlf','xlb','iwm','qqq','xlv','bsbr','enia','hpq','kdp']
         self.macd_window = [5,15,3]
         self.stoch_window = [200,3,7]
         self.buy_criteria = 5
