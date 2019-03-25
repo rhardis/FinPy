@@ -42,29 +42,38 @@ days_until_sale = 10
 
 sd = rs.securityData()
 greater_df_list = []
-temp_list = ['SPY','MCK','AAPL']
-for ticker in ['SPY']:#sd.tickers[:500]: # this is normally ticker in sd.tickers to get all tickers on NYSE
-    print(ticker)
-    unconstrained_data = rs.get_ticker_data(ticker.upper(), 'daily', '0')
-    dates_df = unconstrained_data[(unconstrained_data.DT >= start_date) & (unconstrained_data.DT <= end_date)]
-    dates_list = list(dates_df.DT)
-    for day in dates_list:
-        ticker_data = rs.constrain_data(unconstrained_data, None, day)
-        stoch_val = rs.calculate_stochastic(ticker_data, sd.macd_window, sd.stoch_window)
-        if stoch_val < 5:
-            df_list = [ticker]
-            df_list.append(day)
-            df_list.append(stoch_val)
-            df_list.extend(calculate_return(unconstrained_data, day, days_until_sale))
-            greater_df_list.append(df_list)
-        elif stoch_val > 95:
-            df_list = [ticker]
-            df_list.append(day)
-            df_list.append(stoch_val)
-            #df_list.append('Sell_Signal')
-            df_list.extend(calculate_return(unconstrained_data, day, days_until_sale))
-            #df_list.append(np.nan)
-            greater_df_list.append(df_list)       
+temp_list = ['SPY','MCK','AAPL','GOOG','KHC','UTX','IWN','XLB','XLE','JNJ','BAC']
+for i, ticker in enumerate(temp_list):#sd.tickers[:500]: # this is normally ticker in sd.tickers to get all tickers on NYSE
+    try:
+        print(ticker)
+        if i == 0:
+            unconstrained_data, ts = rs.get_ticker_data(ticker.upper(), 'daily', '0', True, None)
+            print('changed strings to datetime')
+        else:
+            unconstrained_data, unused = rs.get_ticker_data(ticker.upper(), 'daily', '0', False, ts)
+            print('replaced strings with datetime from ticker 0')
+            
+        dates_df = unconstrained_data[(unconstrained_data.DT >= start_date) & (unconstrained_data.DT <= end_date)]
+        dates_list = list(dates_df.DT)
+        for day in dates_list:
+            ticker_data = rs.constrain_data(unconstrained_data, None, day)
+            stoch_val = rs.calculate_stochastic(ticker_data, sd.macd_window, sd.stoch_window)
+            if stoch_val < 5:
+                df_list = [ticker]
+                df_list.append(day)
+                df_list.append(stoch_val)
+                df_list.extend(calculate_return(unconstrained_data, day, days_until_sale))
+                greater_df_list.append(df_list)
+            elif stoch_val > 95:
+                df_list = [ticker]
+                df_list.append(day)
+                df_list.append(stoch_val)
+                #df_list.append('Sell_Signal')
+                df_list.extend(calculate_return(unconstrained_data, day, days_until_sale))
+                #df_list.append(np.nan)
+                greater_df_list.append(df_list)       
+    except:
+        print('could not load data for {}'.format(ticker))
         
             
 returns_df = pd.DataFrame(greater_df_list, columns=['ticker','buy_date','stochastic_value', 'buy_price','sell_price','sell_date', 'return'])

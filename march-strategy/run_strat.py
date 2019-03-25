@@ -117,7 +117,7 @@ def constrain_data(df, start_date, end_date):
     return df
 
 
-def get_ticker_data(ticker, pull_type, interval='0'):
+def get_ticker_data(ticker, pull_type, interval='0', first_flag=False, ts=None):
     df_flag = False
     count = 0
     while not df_flag and count < 10:
@@ -133,10 +133,15 @@ def get_ticker_data(ticker, pull_type, interval='0'):
         
     if not df_flag:
         ticker_df = pd.DataFrame()
-        
-    ticker_df = convert_str_to_dt(ticker_df)
     
-    return ticker_df
+    if first_flag:    
+        ticker_df = convert_str_to_dt(ticker_df)
+    else:
+        ticker_df.DT = ts
+    
+    t_series = ticker_df.DT
+    
+    return ticker_df, t_series
 
 
 def convert_str_to_dt(df):
