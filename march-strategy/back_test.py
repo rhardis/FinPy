@@ -65,8 +65,8 @@ for i, ticker in enumerate(['SPY']):#sd.tickers[:500]: # this is normally ticker
         unconstrained_data = downcast_floats(unconstrained_data)
         
         dates_df = unconstrained_data[(unconstrained_data.DT >= start_date) & (unconstrained_data.DT <= end_date)]
-        dates_list = list(dates_df.DT)
-        for day in dates_list:
+        for row in dates_df.itertuples():
+            day = row.DT
             ticker_data = rs.constrain_data(unconstrained_data, None, day)
             stoch_val = rs.calculate_stochastic(ticker_data, sd.macd_window, sd.stoch_window)
             if stoch_val < 5:
