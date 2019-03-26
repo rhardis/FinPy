@@ -12,6 +12,15 @@ from datetime import datetime, timedelta
 import run_strat as rs
 
 
+def downcast_floats(df):
+    df_copy = df.copy(deep=True)
+    df_float = df_copy.select_dtypes(include=['float'])
+    converted_float = df_float.apply(pd.to_numeric, downcast='float')
+    df[converted_float.columns] = converted_float
+    
+    return df
+
+
 def calculate_return(df, buy_date, period):
     df = df.copy(deep=True)
     df.reset_index(inplace=True)
@@ -43,7 +52,7 @@ days_until_sale = 10
 sd = rs.securityData()
 greater_df_list = []
 temp_list = ['SPY','MCK','AAPL','GOOG','KHC','UTX','IWN','XLB','XLE','JNJ','BAC']
-for i, ticker in enumerate(temp_list):#sd.tickers[:500]: # this is normally ticker in sd.tickers to get all tickers on NYSE
+for i, ticker in enumerate(['SPY']):#sd.tickers[:500]: # this is normally ticker in sd.tickers to get all tickers on NYSE
     try:
         print(ticker)
         if i == 0:
@@ -53,6 +62,8 @@ for i, ticker in enumerate(temp_list):#sd.tickers[:500]: # this is normally tick
             unconstrained_data, unused = rs.get_ticker_data(ticker.upper(), 'daily', '0', False, ts)
             print('replaced strings with datetime from ticker 0')
             
+        unconstrained_data = downcast_floats(unconstrained_data)
+        
         dates_df = unconstrained_data[(unconstrained_data.DT >= start_date) & (unconstrained_data.DT <= end_date)]
         dates_list = list(dates_df.DT)
         for day in dates_list:

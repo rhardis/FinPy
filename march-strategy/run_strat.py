@@ -145,8 +145,7 @@ def get_ticker_data(ticker, pull_type, interval='0', first_flag=False, ts=None):
 
 
 def convert_str_to_dt(df):
-    for row in range(len(df.index)):
-        df.DT[row] = dt.strptime(df.DT[row], '%Y-%m-%d')
+    df.DT = pd.to_datetime(df.DT, infer_datetime_format=True)
     
     return df
 
