@@ -43,16 +43,14 @@ start_time = datetime.now()
 
 start_date = datetime(1999, 1, 1)  # Change this line to change the start date you want to use. (Year, Month, Day)
 end_date = datetime.now()
-days_until_sale = 10
-#delta_dates = end_date - start_date
-#dates_list = []
-#for i in range(delta_dates.days):
-#    dates_list.append(start_date + timedelta(days=i))
+days_until_sale = 30
+
 
 sd = rs.securityData()
 greater_df_list = []
 temp_list = ['SPY','MCK','AAPL','GOOG','KHC','UTX','IWN','XLB','XLE','JNJ','BAC']
-for i, ticker in enumerate(['SPY']):#sd.tickers[:500]: # this is normally ticker in sd.tickers to get all tickers on NYSE
+l = ['SPY']
+for i, ticker in enumerate(l):#sd.tickers[:500]: # this is normally ticker in sd.tickers to get all tickers on NYSE
     try:
         print(ticker)
         if i == 0:
@@ -87,9 +85,12 @@ for i, ticker in enumerate(['SPY']):#sd.tickers[:500]: # this is normally ticker
         print('could not load data for {}'.format(ticker))
         
             
-returns_df = pd.DataFrame(greater_df_list, columns=['ticker','buy_date','stochastic_value', 'buy_price','sell_price','sell_date', 'return'])
+returns_df = pd.DataFrame(greater_df_list, columns=['ticker','buy_date','stochastic_value', 'buy_price','sell_price','sell_date', 'Return'])
 returns_df = returns_df[returns_df.stochastic_value <= 5]
-returns_df.to_csv('returns_summary.csv')
+#returns_df.to_csv('returns_summary.csv')
+
+avg_return = np.mean(returns_df.Return)
+print('The average return for {} with a hold time of {} days is {}.'.format(l, days_until_sale, avg_return))
             
 end_time = datetime.now()
 
