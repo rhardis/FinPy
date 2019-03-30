@@ -43,7 +43,7 @@ start_time = datetime.now()
 
 start_date = datetime(1999, 1, 1)  # Change this line to change the start date you want to use. (Year, Month, Day)
 end_date = datetime.now()
-days_until_sale = 30
+days_until_sale = 10
 
 
 sd = rs.securityData()
@@ -63,24 +63,28 @@ for i, ticker in enumerate(l):#sd.tickers[:500]: # this is normally ticker in sd
         unconstrained_data = downcast_floats(unconstrained_data)
         
         dates_df = unconstrained_data[(unconstrained_data.DT >= start_date) & (unconstrained_data.DT <= end_date)]
+        
+        prior = 0
         for row in dates_df.itertuples():
             day = row.DT
             ticker_data = rs.constrain_data(unconstrained_data, None, day)
             stoch_val = rs.calculate_stochastic(ticker_data, sd.macd_window, sd.stoch_window)
-            if stoch_val < 5:
+            if (prior < 5) and (stoch_val > prior):
                 df_list = [ticker]
                 df_list.append(day)
                 df_list.append(stoch_val)
                 df_list.extend(calculate_return(unconstrained_data, day, days_until_sale))
                 greater_df_list.append(df_list)
-            elif stoch_val > 95:
-                df_list = [ticker]
-                df_list.append(day)
-                df_list.append(stoch_val)
-                #df_list.append('Sell_Signal')
-                df_list.extend(calculate_return(unconstrained_data, day, days_until_sale))
-                #df_list.append(np.nan)
-                greater_df_list.append(df_list)       
+#            elif stoch_val > 95:
+#                df_list = [ticker]
+#                df_list.append(day)
+#                df_list.append(stoch_val)
+#                #df_list.append('Sell_Signal')
+#                df_list.extend(calculate_return(unconstrained_data, day, days_until_sale))
+#                #df_list.append(np.nan)
+#                greater_df_list.append(df_list)
+                
+            prior = stoch_val
     except:
         print('could not load data for {}'.format(ticker))
         
