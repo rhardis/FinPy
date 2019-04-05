@@ -21,23 +21,16 @@ def downcast_floats(df):
     return df
 
 
-def calculate_return(df, buy_date, period):
+def calculate_return(df, period):
     df = df.copy(deep=True)
     df.reset_index(inplace=True)
-    df = rs.constrain_data(df, buy_date, end_date)
-    start_df = df[df.DT == buy_date]
-    start_list = start_df['Close']
-    start_price = start_list.iloc[0]
-    start_date_index = df[df.DT == buy_date].index.values.astype(int)[0]
-    end_price = df['Close'][start_date_index + period]
-    sell_date = df.DT[start_date_index + period]
-    if (sell_date - df.DT.iloc[-1]).days > 0:
-        print('end date out of range')
-        net_return = np.nan
-    else:
-        net_return = (end_price - start_price) / start_price * 100
     
-    return [start_price, end_price, sell_date, net_return]
+    df['day_offset'] = df.Close.shift(-period)
+    df['returns'] = (df.day_offset - df.Close) / df.Close * 100
+    
+    returns_df = df.drop(['day_offset'], axis=1)
+    
+    return returns_df
 
 start_time = datetime.now()
 
@@ -53,32 +46,23 @@ sd = rs.securityData()
 greater_df_list = []
 temp_list = ['SPY','MCK','AAPL','GOOG','KHC','UTX','IWN','XLB','XLE','JNJ','BAC']
 for i, ticker in enumerate(['SPY']):#sd.tickers[:500]: # this is normally ticker in sd.tickers to get all tickers on NYSE
-    try:
-        print(ticker)
-        if i == 0:
-            unconstrained_data, ts = rs.get_ticker_data(ticker.upper(), 'daily', '0', True, None)
-            print('changed strings to datetime')
-        else:
-            unconstrained_data, unused = rs.get_ticker_data(ticker.upper(), 'daily', '0', False, ts)
-            print('replaced strings with datetime from ticker 0')
-            
-        unconstrained_data = downcast_floats(unconstrained_data)
+    print(ticker)
+    if i == 0:
+        unconstrained_data, ts = rs.get_ticker_data(ticker.upper(), 'daily', '0', True, None)
+        print('changed strings to datetime')
+    else:
+        unconstrained_data, unused = rs.get_ticker_data(ticker.upper(), 'daily', '0', False, ts)
+        print('replaced strings with datetime from ticker 0')
         
-        # run all strategies
-        
-        
-        
-        # Combine strategy output signals series with the original unconstrained data dataframe
-        
-        
-        
-    except:
-        print('could not load data for {}'.format(ticker))
-        
-            
-returns_df = pd.DataFrame(greater_df_list, columns=['ticker','buy_date','stochastic_value', 'buy_price','sell_price','sell_date', 'return'])
-returns_df = returns_df[returns_df.stochastic_value <= 5]
-returns_df.to_csv('returns_summary.csv')
+    unconstrained_data = downcast_floats(unconstrained_data)
+    
+    # run all strategies
+    stoch_df = rs.calculate_stochastic(unconstrained_data, sd.macd_window, sd.stoch_window)
+    
+    returns_df = calculate_return(stoch_df, days_until_sale)
+    
+    returns_df = returns_df[(returns_df.stoch_indicator < 5) & (returns_df.stoch_indicator > 0)]
+    returns_df.to_csv('returns_summary_fast.csv')
             
 end_time = datetime.now()
 

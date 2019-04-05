@@ -168,20 +168,18 @@ def calculate_stochastic(ticker_df, macd_args, stoch_args):
     
     # Run some math on the ticker dataframe
     lookback_val = len(df_macd) if len(df_macd) < stoch_args[0] else stoch_args[0]
-    df_macd = df_macd.iloc[-lookback_val:,:]
-    max_val = df_macd.signal.max()
-    min_val = df_macd.signal.min()
+    df_macd['max_val'] = df_macd.signal.rolling(lookback_val).max()
+    df_macd['min_val'] = df_macd.signal.rolling(lookback_val).min()
     
-    df_macd['K_200'] = (df_macd.signal - min_val) / (max_val - min_val) * 100
-    K_Full = np.mean(df_macd.K_200[-stoch_args[1]:])
-    #print(K_Full)
+    df_macd['K_200'] = (df_macd.signal - df_macd.min_val) / (df_macd.max_val - df_macd.min_val) * 100
+    df_macd['stoch_val'] = df_macd.K_200.rolling(stoch_args[1]).mean()
+    df_macd['shift_stoch'] = df_macd.stoch_val.shift(1)
+    df_macd['sdiff_sign'] = np.sign(df_macd.stoch_val - df_macd.shift_stoch)
+    df_macd['stoch_indicator'] = df_macd.sdiff_sign * df_macd.shift_stoch
     
-    D_Avg = np.mean(df_macd.K_200[-stoch_args[2]:])
-    #print(D_Avg)
+    df_stoch = df_macd.drop(['stoch_val', 'shift_stoch', 'sdiff_sign', 'Dividend', 'Split Coef', 'TimeDelta', 'DT', 'stock_fast_ema', 'stock_slow_ema', 'macd', 'signal', 'crossover', 'max_val', 'min_val', 'K_200'], axis=1)
     
-    stoch_val = K_Full
-    
-    return stoch_val
+    return df_stoch
 
 
 def email_blast(to_address, subject, message):
