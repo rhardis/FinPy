@@ -91,7 +91,7 @@ for i, ticker in enumerate(l):#sd.tickers[:500]: # this is normally ticker in sd
             
 returns_df = pd.DataFrame(greater_df_list, columns=['ticker','buy_date','stochastic_value', 'buy_price','sell_price','sell_date', 'Return'])
 returns_df = returns_df[returns_df.stochastic_value <= 5]
-#returns_df.to_csv('returns_summary.csv')
+returns_df.to_csv('returns_summary.csv')
 
 avg_return = np.mean(returns_df.Return)
 print('The average return for {} with a hold time of {} days is {}.'.format(l, days_until_sale, avg_return))
