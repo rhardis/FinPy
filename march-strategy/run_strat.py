@@ -177,7 +177,8 @@ def calculate_stochastic(ticker_df, macd_args, stoch_args):
     df_macd['sdiff_sign'] = np.sign(df_macd.stoch_val - df_macd.shift_stoch)
     df_macd['stoch_indicator'] = df_macd.sdiff_sign * df_macd.shift_stoch
     
-    df_stoch = df_macd.drop(['stoch_val', 'shift_stoch', 'sdiff_sign', 'Dividend', 'Split Coef', 'TimeDelta', 'DT', 'stock_fast_ema', 'stock_slow_ema', 'macd', 'signal', 'crossover', 'max_val', 'min_val', 'K_200'], axis=1)
+    df_stoch = df_macd.drop(['stoch_val', 'shift_stoch', 'sdiff_sign', 'Dividend', 'Split Coef', 'DT', 'stock_fast_ema', 'stock_slow_ema', 'macd', 'signal', 'crossover', 'max_val', 'min_val', 'K_200'], axis=1)
+    #df_stoch = df_macd
     
     return df_stoch
 
@@ -208,39 +209,22 @@ def pull_data(ticker,pullType,interval='0',key='1RJDU8R6RESLVE09'):
         data1, meta_data1 = ts.get_intraday(symbol=ticker,interval=interval,outputsize='full')
         data1.columns = ['Open','High','Low','Close','Volume']
         
-        if interval == '1min':
-            td = 1
-        elif interval == '5min':
-            td = 5
-        elif interval == '15min':
-            td = 15
-        elif interval == '30min':
-            td = 30
-        elif interval == '60min':
-            td = 60
-        else:
-            td = 0
-        
-        data1['TimeDelta'] = td*60*1000*.75
         
         print('Pulled intraday with interval = ' + interval + '\n')
     elif pullType == 'daily':
         data1, meta_data1 = ts.get_daily_adjusted(symbol=ticker,outputsize='full')
         data1=data1.iloc[:,[0,1,2,3,5,6,7]]
         data1.columns = ['Open','High','Low','Close','Volume','Dividend','Split Coef']
-        data1['TimeDelta'] = 24*60*60*1000*.75
         print('Pulled daily\n')
     elif pullType == 'weekly':
         data1, meta_data1 = ts.get_weekly_adjusted(symbol=ticker)
         data1=data1.iloc[:,[0,1,2,3,5,6]]
         data1.columns = ['Open','High','Low','Close','Volume','Dividend']
-        data1['TimeDelta'] = 7*24*60*60*1000*.75
         print('Pulled weekly\n')
     elif pullType == 'monthly':
         data1, meta_data1 = ts.get_monthly_adjusted(symbol=ticker)
         data1=data1.iloc[:,[0,1,2,3,5,6]]
         data1.columns = ['Open','High','Low','Close','Volume','Dividend']
-        data1['TimeDelta'] = 30*24*60*60*1000*.75
         print('Pulled monthly\n')
     else:
         print('Please enter a valid pull type')

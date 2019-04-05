@@ -29,6 +29,7 @@ def calculate_return(df, period):
     df['returns'] = (df.day_offset - df.Close) / df.Close * 100
     
     returns_df = df.drop(['day_offset'], axis=1)
+    #returns_df = df
     
     return returns_df
 
@@ -45,24 +46,30 @@ days_until_sale = 10
 sd = rs.securityData()
 greater_df_list = []
 temp_list = ['SPY','MCK','AAPL','GOOG','KHC','UTX','IWN','XLB','XLE','JNJ','BAC']
-for i, ticker in enumerate(['SPY']):#sd.tickers[:500]: # this is normally ticker in sd.tickers to get all tickers on NYSE
+for i, ticker in enumerate(temp_list):#sd.tickers[:500]: # this is normally ticker in sd.tickers to get all tickers on NYSE
     print(ticker)
-    if i == 0:
-        unconstrained_data, ts = rs.get_ticker_data(ticker.upper(), 'daily', '0', True, None)
-        print('changed strings to datetime')
-    else:
-        unconstrained_data, unused = rs.get_ticker_data(ticker.upper(), 'daily', '0', False, ts)
-        print('replaced strings with datetime from ticker 0')
+    try:
+        if i == 0:
+            unconstrained_data, ts = rs.get_ticker_data(ticker.upper(), 'daily', '0', True, None)
+            print('changed strings to datetime')
+        else:
+            unconstrained_data, unused = rs.get_ticker_data(ticker.upper(), 'daily', '0', False, ts)
+            print('replaced strings with datetime from ticker 0')
+            
+        unconstrained_data = downcast_floats(unconstrained_data)
         
-    unconstrained_data = downcast_floats(unconstrained_data)
-    
-    # run all strategies
-    stoch_df = rs.calculate_stochastic(unconstrained_data, sd.macd_window, sd.stoch_window)
-    
-    returns_df = calculate_return(stoch_df, days_until_sale)
-    
-    returns_df = returns_df[(returns_df.stoch_indicator < 5) & (returns_df.stoch_indicator > 0)]
-    returns_df.to_csv('returns_summary_fast.csv')
+        # run all strategies
+        stoch_df = rs.calculate_stochastic(unconstrained_data, sd.macd_window, sd.stoch_window)
+        
+        returns_df = calculate_return(stoch_df, days_until_sale)
+        
+        returns_df = returns_df[(returns_df.stoch_indicator < 5) & (returns_df.stoch_indicator > 0)]
+    except:
+        print('Something went wrong with ticker {}'.format(ticker))
+
+
+
+#total_df.to_csv('returns_summary_fast.csv')
             
 end_time = datetime.now()
 
