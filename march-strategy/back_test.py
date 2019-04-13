@@ -39,10 +39,7 @@ start_time = datetime.now()
 start_date = datetime(1999, 1, 1)  # Change this line to change the start date you want to use. (Year, Month, Day)
 end_date = datetime.now()
 days_until_sale = 10
-#delta_dates = end_date - start_date
-#dates_list = []
-#for i in range(delta_dates.days):
-#    dates_list.append(start_date + timedelta(days=i))
+
 
 sd = rs.securityData()
 greater_df_list = []
@@ -77,13 +74,8 @@ for i, ticker in enumerate(sd.tickers[:3]):#sd.tickers[:500]: # this is normally
     except:
         print('Something went wrong with ticker {}'.format(ticker))
 
-
             
 end_time = datetime.now()
 
 elapsed_time = end_time - start_time
 print(elapsed_time)
-        
-        
-    
-    
