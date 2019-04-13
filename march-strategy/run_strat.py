@@ -20,7 +20,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 class securityData:
     def __init__(self):
         #self.tickers = ['spy','khc','ba','mmm','xlu','xlk','xlf','xlb','iwm','qqq','xlv','bsbr','enia','hpq','kdp']
-        self.tickers = self.get_tickers_from_csv(['C:\\Users\\Richard Hardis\\Documents\\GitHub\\FinPy\\march-strategy\\symbol_list_NYSE.csv'])
+        self.tickers = self.get_tickers_from_csv(['C:\\Users\\Richard Hardis\\Documents\\GitHub\\FinPy\\march-strategy\\constituents.csv'])
         self.macd_window = [5,15,3]
         self.stoch_window = [200,3,7]
         self.buy_criteria = 5
@@ -120,14 +120,14 @@ def constrain_data(df, start_date, end_date):
 def get_ticker_data(ticker, pull_type, interval='0', first_flag=False, ts=None):
     df_flag = False
     count = 0
-    while not df_flag and count < 10:
+    while not df_flag and count < 3:
         try:
             ticker_df = pull_data(ticker, pull_type, interval=interval)
             ticker_df = ticker_df.iloc[:,:]
             df_flag = True
         except KeyError:
             print('Pulled Too Soon!  Wait 2 seconds')
-            time.sleep(2)
+            time.sleep(3)
             
         count += 1
         
@@ -168,20 +168,19 @@ def calculate_stochastic(ticker_df, macd_args, stoch_args):
     
     # Run some math on the ticker dataframe
     lookback_val = len(df_macd) if len(df_macd) < stoch_args[0] else stoch_args[0]
-    df_macd = df_macd.iloc[-lookback_val:,:]
-    max_val = df_macd.signal.max()
-    min_val = df_macd.signal.min()
+    df_macd['max_val'] = df_macd.signal.rolling(lookback_val).max()
+    df_macd['min_val'] = df_macd.signal.rolling(lookback_val).min()
     
-    df_macd['K_200'] = (df_macd.signal - min_val) / (max_val - min_val) * 100
-    K_Full = np.mean(df_macd.K_200[-stoch_args[1]:])
-    #print(K_Full)
+    df_macd['K_200'] = (df_macd.signal - df_macd.min_val) / (df_macd.max_val - df_macd.min_val) * 100
+    df_macd['stoch_val'] = df_macd.K_200.rolling(stoch_args[1]).mean()
+    df_macd['shift_stoch'] = df_macd.stoch_val.shift(1)
+    df_macd['sdiff_sign'] = np.sign(df_macd.stoch_val - df_macd.shift_stoch)
+    df_macd['stoch_indicator'] = df_macd.sdiff_sign * df_macd.shift_stoch
     
-    D_Avg = np.mean(df_macd.K_200[-stoch_args[2]:])
-    #print(D_Avg)
+    df_stoch = df_macd.drop(['stoch_val', 'shift_stoch', 'sdiff_sign', 'Dividend', 'Split Coef', 'DT', 'stock_fast_ema', 'stock_slow_ema', 'macd', 'signal', 'crossover', 'max_val', 'min_val', 'K_200'], axis=1)
+    #df_stoch = df_macd
     
-    stoch_val = K_Full
-    
-    return stoch_val
+    return df_stoch
 
 
 def email_blast(to_address, subject, message):
@@ -210,39 +209,22 @@ def pull_data(ticker,pullType,interval='0',key='1RJDU8R6RESLVE09'):
         data1, meta_data1 = ts.get_intraday(symbol=ticker,interval=interval,outputsize='full')
         data1.columns = ['Open','High','Low','Close','Volume']
         
-        if interval == '1min':
-            td = 1
-        elif interval == '5min':
-            td = 5
-        elif interval == '15min':
-            td = 15
-        elif interval == '30min':
-            td = 30
-        elif interval == '60min':
-            td = 60
-        else:
-            td = 0
-        
-        data1['TimeDelta'] = td*60*1000*.75
         
         print('Pulled intraday with interval = ' + interval + '\n')
     elif pullType == 'daily':
         data1, meta_data1 = ts.get_daily_adjusted(symbol=ticker,outputsize='full')
         data1=data1.iloc[:,[0,1,2,3,5,6,7]]
         data1.columns = ['Open','High','Low','Close','Volume','Dividend','Split Coef']
-        data1['TimeDelta'] = 24*60*60*1000*.75
         print('Pulled daily\n')
     elif pullType == 'weekly':
         data1, meta_data1 = ts.get_weekly_adjusted(symbol=ticker)
         data1=data1.iloc[:,[0,1,2,3,5,6]]
         data1.columns = ['Open','High','Low','Close','Volume','Dividend']
-        data1['TimeDelta'] = 7*24*60*60*1000*.75
         print('Pulled weekly\n')
     elif pullType == 'monthly':
         data1, meta_data1 = ts.get_monthly_adjusted(symbol=ticker)
         data1=data1.iloc[:,[0,1,2,3,5,6]]
         data1.columns = ['Open','High','Low','Close','Volume','Dividend']
-        data1['TimeDelta'] = 30*24*60*60*1000*.75
         print('Pulled monthly\n')
     else:
         print('Please enter a valid pull type')

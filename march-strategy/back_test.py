@@ -6,6 +6,7 @@ Created on Wed Mar 13 22:02:27 2019
 """
 import numpy as np
 import pandas as pd
+import time
 
 from datetime import datetime, timedelta
 
@@ -21,23 +22,17 @@ def downcast_floats(df):
     return df
 
 
-def calculate_return(df, buy_date, period):
+def calculate_return(df, period):
     df = df.copy(deep=True)
     df.reset_index(inplace=True)
-    df = rs.constrain_data(df, buy_date, end_date)
-    start_df = df[df.DT == buy_date]
-    start_list = start_df['Close']
-    start_price = start_list.iloc[0]
-    start_date_index = df[df.DT == buy_date].index.values.astype(int)[0]
-    end_price = df['Close'][start_date_index + period]
-    sell_date = df.DT[start_date_index + period]
-    if (sell_date - df.DT.iloc[-1]).days > 0:
-        print('end date out of range')
-        net_return = np.nan
-    else:
-        net_return = (end_price - start_price) / start_price * 100
     
-    return [start_price, end_price, sell_date, net_return]
+    df['day_offset'] = df.Close.shift(-period)
+    df['returns'] = (df.day_offset - df.Close) / df.Close * 100
+    
+    returns_df = df.drop(['day_offset'], axis=1)
+    #returns_df = df
+    
+    return returns_df
 
 start_time = datetime.now()
 
@@ -49,58 +44,38 @@ days_until_sale = 10
 sd = rs.securityData()
 greater_df_list = []
 temp_list = ['SPY','MCK','AAPL','GOOG','KHC','UTX','IWN','XLB','XLE','JNJ','BAC']
-l = ['SPY']
-for i, ticker in enumerate(l):#sd.tickers[:500]: # this is normally ticker in sd.tickers to get all tickers on NYSE
+summary_df = pd.DataFrame()
+for i, ticker in enumerate(sd.tickers[:3]):#sd.tickers[:500]: # this is normally ticker in sd.tickers to get all tickers on NYSE
+    print(ticker)
+    time.sleep(2)
     try:
-        print(ticker)
         if i == 0:
             unconstrained_data, ts = rs.get_ticker_data(ticker.upper(), 'daily', '0', True, None)
             print('changed strings to datetime')
+            summary_df = pd.DataFrame(columns=unconstrained_data.columns)
+            summary_df['ticker'] = ticker
         else:
-            unconstrained_data, unused = rs.get_ticker_data(ticker.upper(), 'daily', '0', False, ts)
+            unconstrained_data, _ = rs.get_ticker_data(ticker.upper(), 'daily', '0', False, ts)
             print('replaced strings with datetime from ticker 0')
             
         unconstrained_data = downcast_floats(unconstrained_data)
         
-        dates_df = unconstrained_data[(unconstrained_data.DT >= start_date) & (unconstrained_data.DT <= end_date)]
+        # run all strategies
+        stoch_df = rs.calculate_stochastic(unconstrained_data, sd.macd_window, sd.stoch_window)
         
-        prior = 0
-        for row in dates_df.itertuples():
-            day = row.DT
-            ticker_data = rs.constrain_data(unconstrained_data, None, day)
-            stoch_val = rs.calculate_stochastic(ticker_data, sd.macd_window, sd.stoch_window)
-            if (prior < 5) and (stoch_val > prior):
-                df_list = [ticker]
-                df_list.append(day)
-                df_list.append(stoch_val)
-                df_list.extend(calculate_return(unconstrained_data, day, days_until_sale))
-                greater_df_list.append(df_list)
-#            elif stoch_val > 95:
-#                df_list = [ticker]
-#                df_list.append(day)
-#                df_list.append(stoch_val)
-#                #df_list.append('Sell_Signal')
-#                df_list.extend(calculate_return(unconstrained_data, day, days_until_sale))
-#                #df_list.append(np.nan)
-#                greater_df_list.append(df_list)
-                
-            prior = stoch_val
+        returns_df = calculate_return(stoch_df, days_until_sale)
+        
+        returns_df = returns_df[(returns_df.stoch_indicator < 5) & (returns_df.stoch_indicator > 0)]
+        returns_df['ticker'] = ticker
+        
+        summary_df = pd.concat([summary_df, returns_df])
+        
+        returns_df.to_csv('returns_summary_{}.csv'.format(ticker))
     except:
-        print('could not load data for {}'.format(ticker))
-        
-            
-returns_df = pd.DataFrame(greater_df_list, columns=['ticker','buy_date','stochastic_value', 'buy_price','sell_price','sell_date', 'Return'])
-returns_df = returns_df[returns_df.stochastic_value <= 5]
-returns_df.to_csv('returns_summary.csv')
+        print('Something went wrong with ticker {}'.format(ticker))
 
-avg_return = np.mean(returns_df.Return)
-print('The average return for {} with a hold time of {} days is {}.'.format(l, days_until_sale, avg_return))
             
 end_time = datetime.now()
 
 elapsed_time = end_time - start_time
 print(elapsed_time)
-        
-        
-    
-    
