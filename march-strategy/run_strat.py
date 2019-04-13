@@ -20,7 +20,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 class securityData:
     def __init__(self):
         #self.tickers = ['spy','khc','ba','mmm','xlu','xlk','xlf','xlb','iwm','qqq','xlv','bsbr','enia','hpq','kdp']
-        self.tickers = self.get_tickers_from_csv(['C:\\Users\\Richard Hardis\\Documents\\GitHub\\FinPy\\march-strategy\\symbol_list_NYSE.csv'])
+        self.tickers = self.get_tickers_from_csv(['C:\\Users\\Richard Hardis\\Documents\\GitHub\\FinPy\\march-strategy\\constituents.csv'])
         self.macd_window = [5,15,3]
         self.stoch_window = [200,3,7]
         self.buy_criteria = 5
@@ -120,14 +120,14 @@ def constrain_data(df, start_date, end_date):
 def get_ticker_data(ticker, pull_type, interval='0', first_flag=False, ts=None):
     df_flag = False
     count = 0
-    while not df_flag and count < 10:
+    while not df_flag and count < 3:
         try:
             ticker_df = pull_data(ticker, pull_type, interval=interval)
             ticker_df = ticker_df.iloc[:,:]
             df_flag = True
         except KeyError:
             print('Pulled Too Soon!  Wait 2 seconds')
-            time.sleep(2)
+            time.sleep(3)
             
         count += 1
         

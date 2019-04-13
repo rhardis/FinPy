@@ -6,6 +6,7 @@ Created on Wed Mar 13 22:02:27 2019
 """
 import numpy as np
 import pandas as pd
+import time
 
 from datetime import datetime, timedelta
 
@@ -46,14 +47,18 @@ days_until_sale = 10
 sd = rs.securityData()
 greater_df_list = []
 temp_list = ['SPY','MCK','AAPL','GOOG','KHC','UTX','IWN','XLB','XLE','JNJ','BAC']
-for i, ticker in enumerate(temp_list):#sd.tickers[:500]: # this is normally ticker in sd.tickers to get all tickers on NYSE
+summary_df = pd.DataFrame()
+for i, ticker in enumerate(sd.tickers[:3]):#sd.tickers[:500]: # this is normally ticker in sd.tickers to get all tickers on NYSE
     print(ticker)
+    time.sleep(2)
     try:
         if i == 0:
             unconstrained_data, ts = rs.get_ticker_data(ticker.upper(), 'daily', '0', True, None)
             print('changed strings to datetime')
+            summary_df = pd.DataFrame(columns=unconstrained_data.columns)
+            summary_df['ticker'] = ticker
         else:
-            unconstrained_data, unused = rs.get_ticker_data(ticker.upper(), 'daily', '0', False, ts)
+            unconstrained_data, _ = rs.get_ticker_data(ticker.upper(), 'daily', '0', False, ts)
             print('replaced strings with datetime from ticker 0')
             
         unconstrained_data = downcast_floats(unconstrained_data)
@@ -64,12 +69,15 @@ for i, ticker in enumerate(temp_list):#sd.tickers[:500]: # this is normally tick
         returns_df = calculate_return(stoch_df, days_until_sale)
         
         returns_df = returns_df[(returns_df.stoch_indicator < 5) & (returns_df.stoch_indicator > 0)]
+        returns_df['ticker'] = ticker
+        
+        summary_df = pd.concat([summary_df, returns_df])
+        
+        returns_df.to_csv('returns_summary_{}.csv'.format(ticker))
     except:
         print('Something went wrong with ticker {}'.format(ticker))
 
 
-
-#total_df.to_csv('returns_summary_fast.csv')
             
 end_time = datetime.now()
 
