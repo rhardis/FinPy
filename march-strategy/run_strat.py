@@ -11,6 +11,8 @@ import time
 
 from datetime import datetime as dt
 from datetime import timedelta as td
+from sklearn import linear_model
+from sklearn.model_selection import train_test_split
 
 from alpha_vantage.timeseries import TimeSeries
 
@@ -126,8 +128,9 @@ def get_ticker_data(ticker, pull_type, interval='0', first_flag=False, ts=None):
             ticker_df = ticker_df.iloc[:,:]
             df_flag = True
         except KeyError:
-            print('Pulled Too Soon!  Wait 2 seconds')
-            time.sleep(3)
+            waiting = 3
+            print('Pulled Too Soon!  Wait {} seconds'.format(waiting))
+            time.sleep(waiting)
             
         count += 1
         
@@ -177,8 +180,8 @@ def calculate_stochastic(ticker_df, macd_args, stoch_args):
     df_macd['sdiff_sign'] = np.sign(df_macd.stoch_val - df_macd.shift_stoch)
     df_macd['stoch_indicator'] = df_macd.sdiff_sign * df_macd.shift_stoch
     
-    df_stoch = df_macd.drop(['stoch_val', 'shift_stoch', 'sdiff_sign', 'Dividend', 'Split Coef', 'DT', 'stock_fast_ema', 'stock_slow_ema', 'macd', 'signal', 'crossover', 'max_val', 'min_val', 'K_200'], axis=1)
-    #df_stoch = df_macd
+    #df_stoch = df_macd.drop(['stoch_val', 'shift_stoch', 'sdiff_sign', 'Dividend', 'Split Coef', 'DT', 'stock_fast_ema', 'stock_slow_ema', 'macd', 'signal', 'crossover', 'max_val', 'min_val', 'K_200'], axis=1)
+    df_stoch = df_macd
     
     return df_stoch
 
@@ -233,6 +236,92 @@ def pull_data(ticker,pullType,interval='0',key='1RJDU8R6RESLVE09'):
     
     return data1
 
+
+def make_model(predictor_df, target_df):
+    X = predictor_df
+    y = target_df
+    lm = linear_model.LinearRegression()
+    model = lm.fit(X,y)
+    
+    return model, lm.score(X, y), lm.coef_, lm.intercept_
+
+
+def test_model_tts(X, y):
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+    lm = linear_model.LinearRegression()
+    model = lm.fit(X_train, y_train)
+    predictions = lm.predict(X_test)
+    sc = model.score(X_test, y_test)
+    
+    return sc
+
+
+def calc_keltner(df, ema_window, std_coef, atr_window, predicted_periods):
+    df['HL'] = df.High - df.Low
+    df['HCl'] = np.abs(df.High-df.Close.shift(1))
+    df['LCl'] = np.abs(df.Low-df.Close.shift(1))
+    df['TR'] = df.HL
+    for idx, row in df.iterrows():
+        try:
+            max_ = np.max([row['HL'], row['HCl'], row['HCl']])
+            print(max_)
+            row['TR'] = max_
+        except:
+            print('err')
+            row['TR'] = np.nan
+#    df['ATR'] = df.TR.rolling(window=atr_window).mean()
+#    
+#    df['EMA'] = pd.ewma(df.Close, span=ema_window)
+#    df['Upper'] = df.EMA + (std_coef * df.ATR)
+#    df['Lower'] = df.EMA - (std_coef * df.ATR)
+#    
+#    df['Predicted_High'] = df.Upper.shift(predicted_periods)
+#    df['Predicted_Avg'] = df.EMA.shift(predicted_periods)
+#    df['Predicted_Low'] = df.Lower.shift(predicted_periods)
+    
+    #df.drop(['HL', 'HCl', 'LCl', 'TR', 'ATR', 'EMA', 'Upper', 'Lower'])
+    
+    return df
+
+
+def calc_ichi(df, lookback_val):
+    df['max_lp'] = df.High.rolling(lookback_val).max()
+    df['min_lp'] = df.Low.rolling(lookback_val).min()
+    df['avg_lp'] = (df.max_lp + df.min_lp)/2
+    df['projected_val'] = df.avg_lp.shift(1)
+    
+    return df
+
+
+def ichi_open_cross(df, span, percent_prof):
+    # 1. Calculate the ichimoku projections for the next week
+    df = calc_ichi(df, span)
+    
+    # 2. Calculate the high of the next week
+    df['shift_high'] = df.High.shift(-span)
+    df['next_high'] = df.shift_high.rolling(span).max()
+    
+    # 3. Create a column for the previous close
+    df['prev_close'] = df.Close.shift(1)
+    
+    # 4. Calculate the difference between the projected price and this week's high
+    df['return_over_projected'] = (df.next_high - df.projected_val) / df.projected_val * 100
+    
+    # 5. Calculate return if sold at close
+    df['close_of_week'] = df.Close.shift(-span)
+    df['return_sold_close'] = (df.close_of_week - df.projected_val) / df.projected_val * 100
+    
+    # 6. Calculate whether price gets above a certain % of projected
+    df['percent_sale_bool'] = df.return_over_projected > percent_prof
+    
+    # 7. Find where open low and reach sale happens
+    df['rose_to_projected'] = (df.Open < df.projected_val) & (df.next_high >= df.projected_val)
+    
+    # . Find where the security opened the next week below the projected price and had a high above the projected price
+    #df = df[df.rose_to_projected]  # df[(df.Open < df.projected_val) & (df.next_high >= df.projected_val)]
+    
+
+    return df
 
 if __name__ == '__main__':
     main(send_email=False)
