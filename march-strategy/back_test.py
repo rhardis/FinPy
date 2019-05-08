@@ -35,46 +35,31 @@ def calculate_return(df, period):
     
     return returns_df
 
-start_time = datetime.now()
 
-start_date = datetime(1999, 1, 1)  # Change this line to change the start date you want to use. (Year, Month, Day)
-end_date = datetime.now()
-days_until_sale = 10
-
-
-sd = rs.securityData()
-greater_df_list = []
-temp_list = ['SPY','MCK','AAPL','GOOG','KHC','UTX','IWN','XLB','XLE','JNJ','BAC']
-summary_df = pd.DataFrame()
-test_strat_df = pd.DataFrame.from_dict({'Ticker':'remove',
-                                        'Avg_Return_Sell_High':[0],
-                                        'Stdv_Return_Sell_High':[0],
-                                        'Avg_Return_Sell_Close':[0],
-                                        'Stdv_Return_Sell_Close':[0],
-                                        'Accuracy_Prev_Close':[0],
-                                        'Accuracy_1%':[0]})
-timeframe = 'daily'
-for i, ticker in enumerate(sd.tickers[:10]):#sd.tickers[:500]: # this is normally ticker in sd.tickers to get all tickers on NYSE
+def mloop(i, ticker, all_df, test_strat_df, ts=None):
     print(ticker)
-    time.sleep(2)
+    #time.sleep(2)
     #try:
-    if i == 0:
-        unconstrained_data, ts = rs.get_ticker_data(ticker.upper(), timeframe, '0', True, None)
+    if first_run:
+        unconstrained_data, ts, no_data_flag = rs.get_ticker_data(ticker.upper(), timeframe, '0', True, None)
         print('changed strings to datetime')
         summary_df = pd.DataFrame(columns=unconstrained_data.columns)
         summary_df['ticker'] = ticker
         all_df = unconstrained_data.copy(deep=True)
     else:
-        unconstrained_data, _ = rs.get_ticker_data(ticker.upper(), timeframe, '0', False, ts)
+        unconstrained_data, _, no_data_flag = rs.get_ticker_data(ticker.upper(), timeframe, '0', False, ts)
         print('replaced strings with datetime from ticker 0')
+        
+    if no_data_flag:
+        return None, None, True, ts
         
     unconstrained_data = downcast_floats(unconstrained_data)
     #unconstrained_data = unconstrained_data.iloc[-100:,:]
     
     
-    if len(unconstrained_data) == 0:
-        print('could not get data for {}'.format(ticker))
-        continue
+#    if len(unconstrained_data) == 0:
+#        print('could not get data for {}'.format(ticker))
+#        continue
     
     # run all strategies
     #all_df = rs.calculate_stochastic(unconstrained_data, sd.macd_window, sd.stoch_window)
@@ -124,6 +109,45 @@ for i, ticker in enumerate(sd.tickers[:10]):#sd.tickers[:500]: # this is normall
                                         'Accuracy_Prev_Close':[accpc],
                                         'Accuracy_1%':[acc1p]})
     test_strat_df = pd.concat([test_strat_df, add_df])
+    
+    return all_df, test_strat_df, False, ts
+
+
+start_time = datetime.now()
+
+start_date = datetime(1999, 1, 1)  # Change this line to change the start date you want to use. (Year, Month, Day)
+end_date = datetime.now()
+days_until_sale = 10
+
+
+sd = rs.securityData()
+greater_df_list = []
+temp_list = ['SPY','MCK','AAPL','GOOG','KHC','UTX','IWN','XLB','XLE','JNJ','BAC']
+summary_df = pd.DataFrame()
+test_strat_df = pd.DataFrame.from_dict({'Ticker':'remove',
+                                        'Avg_Return_Sell_High':[0],
+                                        'Stdv_Return_Sell_High':[0],
+                                        'Avg_Return_Sell_Close':[0],
+                                        'Stdv_Return_Sell_Close':[0],
+                                        'Accuracy_Prev_Close':[0],
+                                        'Accuracy_1%':[0]})
+
+timeframe = 'daily'
+try_list = pd.Series(['BAC'])#sd.tickers[:3]  
+first_run = True
+all_df = None
+while len(try_list) > 0:
+    ticker = try_list.iloc[0]
+    if first_run:
+        ts = None
+    all_df, test_strat_df, retry, ts = mloop(first_run, ticker, all_df, test_strat_df, ts)
+    try_list = try_list.iloc[1:]
+    if retry:
+        print('failed on {}.  Sending to end of list'.format(ticker))
+        try_list = try_list.append(pd.Series([ticker]), ignore_index=True)
+        time.sleep(10)
+    print(try_list)
+    first_run = False
     
     #returns_df.to_csv('returns_summary_{}.csv'.format(ticker))
 #    except:

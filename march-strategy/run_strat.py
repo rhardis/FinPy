@@ -128,9 +128,7 @@ def get_ticker_data(ticker, pull_type, interval='0', first_flag=False, ts=None):
             ticker_df = ticker_df.iloc[:,:]
             df_flag = True
         except KeyError:
-            waiting = 3
-            print('Pulled Too Soon!  Wait {} seconds'.format(waiting))
-            time.sleep(waiting)
+            return None, None, True
             
         count += 1
         
@@ -144,7 +142,7 @@ def get_ticker_data(ticker, pull_type, interval='0', first_flag=False, ts=None):
     
     t_series = ticker_df.DT
     
-    return ticker_df, t_series
+    return ticker_df, t_series, False
 
 
 def convert_str_to_dt(df):
