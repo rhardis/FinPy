@@ -299,7 +299,9 @@ def ichi_open_cross(df, span, percent_prof):
     
     # 2. Calculate the high of the next week
     df['shift_high'] = df.High.shift(-span)
+    df['shift_low'] = df.Low.shift(-span)
     df['next_high'] = df.shift_high.rolling(span).max()
+    df['next_low'] = df.shift_low.rolling(span).min()
     
     # 3. Create a column for the previous close
     df['prev_close'] = df.Close.shift(1)
@@ -316,6 +318,9 @@ def ichi_open_cross(df, span, percent_prof):
     
     # 7. Find where open low and reach sale happens
     df['rose_to_projected'] = (df.Open < df.projected_val) & (df.next_high >= df.projected_val)
+    df['Loss_on_Low'] = (df.next_low - df.projected_val) / df.projected_val * 100
+    
+    df['buy_bool'] = df.next_high > df.projected_val
     
     # . Find where the security opened the next week below the projected price and had a high above the projected price
     #df = df[df.rose_to_projected]  # df[(df.Open < df.projected_val) & (df.next_high >= df.projected_val)]

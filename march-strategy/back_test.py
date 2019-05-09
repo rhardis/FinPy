@@ -47,6 +47,7 @@ greater_df_list = []
 temp_list = ['SPY','MCK','AAPL','GOOG','KHC','UTX','IWN','XLB','XLE','JNJ','BAC']
 summary_df = pd.DataFrame()
 test_strat_df = pd.DataFrame.from_dict({'Ticker':'remove',
+                                        'Avg_Return_Sell_Low':[0],
                                         'Avg_Return_Sell_High':[0],
                                         'Stdv_Return_Sell_High':[0],
                                         'Avg_Return_Sell_Close':[0],
@@ -54,7 +55,7 @@ test_strat_df = pd.DataFrame.from_dict({'Ticker':'remove',
                                         'Accuracy_Prev_Close':[0],
                                         'Accuracy_1%':[0]})
 timeframe = 'daily'
-for i, ticker in enumerate(sd.tickers[:10]):#sd.tickers[:500]: # this is normally ticker in sd.tickers to get all tickers on NYSE
+for i, ticker in enumerate(sd.tickers[25:45]):#sd.tickers[:500]: # this is normally ticker in sd.tickers to get all tickers on NYSE
     print(ticker)
     time.sleep(2)
     #try:
@@ -79,21 +80,26 @@ for i, ticker in enumerate(sd.tickers[:10]):#sd.tickers[:500]: # this is normall
     # run all strategies
     #all_df = rs.calculate_stochastic(unconstrained_data, sd.macd_window, sd.stoch_window)
     #all_df = rs.calc_keltner(all_df, 5, .6, 3, 1)
-    wdf = rs.ichi_open_cross(unconstrained_data, 5, 1)
+    wdf = rs.ichi_open_cross(unconstrained_data, 5, 3)
+    ldf = wdf[(wdf.rose_to_projected == False) & (wdf.buy_bool == True)]
+    avg_loss = np.mean(ldf.Loss_on_Low)
     avg_best_return = np.mean(wdf.return_over_projected)
     av_std_best_return = np.std(wdf.return_over_projected)
     avg_close_return = np.mean(wdf.return_sold_close)
     av_std_close_return = np.std(wdf.return_sold_close)
     try:
-        num_correct = len(wdf[wdf.next_high > wdf.prev_close])
-        total = len(wdf)
+        num_correct = len(wdf[(wdf.next_high > wdf.prev_close) & (wdf.prev_close > wdf.projected_val)])
+        total = len(wdf[wdf.prev_close > wdf.projected_val])
         accpc = num_correct / total * 100
     except:
         accpc = 0
     
     try:
-        num_correct = len(wdf[wdf.percent_sale_bool])
-        total = len(wdf)
+        num_correct = len(wdf[wdf.percent_sale_bool & (wdf.prev_close > wdf.projected_val)])
+        print('num correct for {} = {}'.format(ticker, num_correct))
+        total = len(wdf[(wdf.prev_close > wdf.projected_val)])
+        print('new total = {}'.format(total))
+        print('total total = {}'.format(len(wdf)))
         acc1p = num_correct / total * 100
     except:
         acc1p = 0
@@ -117,6 +123,7 @@ for i, ticker in enumerate(sd.tickers[:10]):#sd.tickers[:500]: # this is normall
 #    summary_df = pd.concat([summary_df, returns_df])
     
     add_df = pd.DataFrame.from_dict({'Ticker':ticker,
+                                        'Avg_Return_Sell_Low':[avg_loss],
                                         'Avg_Return_Sell_High':[avg_best_return],
                                         'Stdv_Return_Sell_High':[av_std_best_return],
                                         'Avg_Return_Sell_Close':[avg_close_return],
