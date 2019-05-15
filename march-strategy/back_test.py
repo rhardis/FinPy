@@ -114,7 +114,7 @@ test_strat_df = pd.DataFrame.from_dict({'Ticker':'remove',
                                         'Buy_Frequency':[0]})
 timeframe = 'daily'
 
-ticker_list = sd.tickers[:50]
+ticker_list = sd.tickers[:]
 tlist_size = len(ticker_list)
 t3_count = int(np.floor(tlist_size/3))
 count_list = np.arange(t3_count+1)
@@ -136,7 +136,7 @@ for counter in count_list:
             continue
         
         unconstrained_data = retrieve(i, ticker, from_csv=True)
-        #unconstrained_data = unconstrained_data.iloc[-500:,:]
+        unconstrained_data = unconstrained_data.iloc[:,:]
         if i == 0:
             all_df = unconstrained_data.copy(deep=True)
             i = 1
