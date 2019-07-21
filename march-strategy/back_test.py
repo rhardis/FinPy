@@ -87,159 +87,176 @@ def calculate_exp_ret(ev_df, trades_df, num_top):
     return trades_df
 
 
+def full_func(percentile, exit_low_percent, num_top=3, tstart=None, tend=None, dstart=None, dend=None):
+    summary_df = pd.DataFrame()
+    if exit_low_percent >= 0:
+        exit()
+    
+    test_strat_df = pd.DataFrame.from_dict({'Ticker':'remove',
+                                            'Avg_Return_Sell_High':[0],
+                                            'Stdv_Return_Sell_High':[0],
+                                            'Avg_Return_Sell_Close':[0],
+                                            'Stdv_Return_Sell_Close':[0],
+                                            'Accuracy_{}%le'.format(percentile):[0],
+                                            'Expected_Return':[0],
+                                            'Buy_Frequency':[0]})
+    timeframe = 'daily'
+    
+    ticker_list = sd.tickers[tstart:tend]
+    tlist_size = len(ticker_list)
+    t3_count = int(np.floor(tlist_size/3))
+    count_list = np.arange(t3_count+1)
+    
+    
+    i = 0
+    for counter in count_list:
+        #time.sleep(30)
+        if counter == t3_count+1:
+            tlist = ticker_list[-3:]
+        else:
+            tlist = ticker_list[3 * counter: 3 * counter + 3]
+        
+        #print(tlist)
+        #print('\n')
+        
+        for ticker in tlist:#sd.tickers[:500]: # this is normally ticker in sd.tickers to get all tickers on NYSE
+            if ticker in ['BF.B', 'NFX', 'PX', 'WYN', 'XY']:
+                continue
+            
+            unconstrained_data = retrieve(i, ticker, from_csv=True)
+            unconstrained_data = unconstrained_data.iloc[dstart:dend,:]
+            if i == 0:
+                all_df = unconstrained_data.copy(deep=True)
+                i = 1
+            #print(type(unconstrained_data.DT[0]))
+            
+            if len(unconstrained_data) == 0:
+                #print('could not get data for {}'.format(ticker))
+                continue
+            #unconstrained_data.to_csv('{}_unc.csv'.format(ticker))
+            
+            
+            # run all strategies
+            #all_df = rs.calculate_stochastic(unconstrained_data, sd.macd_window, sd.stoch_window)
+            #all_df = rs.calc_keltner(all_df, 5, .6, 3, 1)
+            wdf, percentile_val = rs.ichi_open_cross(unconstrained_data, 5, percentile, exit_low_percent)
+            
+            #wdf.to_csv('{}_results.csv'.format(ticker))
+            
+            ldf = wdf[(wdf.buy_bool == True) & (wdf.percent_sale_bool == False)]
+            #print('ldf = {}'.format(len(ldf)))
+            #print('wdf potential buys = {}'.format(len(wdf[wdf.buy_bool])))
+            avg_best_return = np.mean(wdf.return_over_projected[wdf.buy_bool])
+            av_std_best_return = np.std(wdf.return_over_projected[wdf.buy_bool])
+            avg_close_return = np.mean(wdf.return_sold_close[wdf.buy_bool])
+            av_std_close_return = np.std(wdf.return_sold_close[wdf.buy_bool])
+            
+            try:
+                num_correct = len(wdf[(wdf.percent_sale_bool) & (wdf.buy_bool) & ~(wdf.exit_low_bool)])
+                num_loss = len(wdf[(wdf.exit_low_bool) & (wdf.buy_bool) & ~(wdf.percent_sale_bool)])
+                #print('num correct for {} = {}'.format(ticker, num_correct))
+                total = len(wdf[wdf.buy_bool])
+                #print('new total = {}'.format(total))
+                #print('total total = {}\n\n'.format(len(wdf)))
+                accsetp = num_correct / total * 100
+                accsetplow = num_loss / total * 100
+            except:
+                accsetp = 0
+                
+            exp_ret = (accsetp/100 * percentile_val) + (accsetplow/100 * exit_low_percent) + ((100-accsetp-accsetplow)/100 * np.mean(wdf.return_sold_close[wdf.buy_bool]))
+            bf = total/len(wdf) * 100
+                
+            all_df = all_df.reset_index(drop=True)
+            all_df['{}_buy'.format(ticker)] = wdf.buy_bool
+            all_df['{}_return_multiplier'.format(ticker)] = wdf.return_as_multiple
+            
+            #returns_df = calculate_return(all_df, days_until_sale)
+        #    X = returns_df.copy(deep=True)
+        #    X = X.drop('date', axis=1)
+        #    X = X.dropna()
+        #    X = normalize_df(X)
+        #    y = X.pop('returns')
+        #    #best_scores = get_best_vars_percentile(X, y, 50)
+        #    model, score, ceofs, intercept = rs.make_model(X, y)
+        #    tts_score = rs.test_model_tts(X, y)
+            
+        #    returns_df = returns_df[(returns_df.stoch_indicator < 5) & (returns_df.stoch_indicator > 0)]
+        #    returns_df['ticker'] = ticker
+            
+        #    summary_df = pd.concat([summary_df, returns_df])
+            
+            add_df = pd.DataFrame.from_dict({'Ticker':ticker,
+                                                'Avg_Return_Sell_High':[avg_best_return],
+                                                'Stdv_Return_Sell_High':[av_std_best_return],
+                                                'Avg_Return_Sell_Close':[avg_close_return],
+                                                'Stdv_Return_Sell_Close':[av_std_close_return],
+                                                'Accuracy_{}%le'.format(percentile):[accsetp],
+                                                'Freq_Loss_{}%'.format(exit_low_percent):[accsetplow],
+                                                'Expected_Return':[exp_ret],
+                                                'Buy_Frequency':[bf],
+                                                'Percentile_Value':[percentile_val]})
+            test_strat_df = pd.concat([test_strat_df, add_df])
+            
+            #returns_df.to_csv('returns_summary_{}.csv'.format(ticker))
+        #    except:
+        #        print('Something went wrong with ticker {}'.format(ticker))
+            
+    #summary_df = summary_df.drop(['DT', 'Dividend'])
+    
+    all_df['dates'] = all_df.DT
+    keep_cols = [col for col in all_df.columns if ('_buy' in col) or ('_return' in col)]
+    keep_cols.append('dates')
+    all_df = all_df[keep_cols]
+    #all_df = all_df.fillna(value=False)
+    sum_cols_list = [col for col in all_df.columns if ('buy' in col)]
+    all_df['trade_available'] = all_df[sum_cols_list].sum(axis=1)
+    
+    
+    days_of_trading = len(all_df[all_df.trade_available > 0])
+    dot_3plus = len(all_df[all_df.trade_available >= 3])
+    print('there were {} potential trade days out of {} total days.  {} of those days had >= 3 trades recommended.'.format(days_of_trading, len(all_df), dot_3plus))
+    coverage = (days_of_trading/len(all_df)*100)
+    print('Trading day coverage = {}%'.format(coverage))
+    test_strat_df = test_strat_df.iloc[1:,:]
+    test_strat_df.reset_index()
+    test_strat_df = test_strat_df.sort_values(by=['Expected_Return'], ascending=False)
+    
+    all_df  = calculate_exp_ret(test_strat_df, all_df, num_top)
+    total_return_multiple = all_df.trade_return_multiple.product()
+    print('Total Return Multiple = {}'.format(total_return_multiple))
+    pos = len(all_df[all_df.trade_return_multiple > 1])
+    neg = len(all_df[all_df.trade_return_multiple < 1])
+    print('There were {} positive trades out of {} total.  Percent = {}%'.format(pos, days_of_trading, pos/days_of_trading*100))
+    print('There were {} negative trades out of {} total.  Percent = {}%'.format(neg, days_of_trading, neg/days_of_trading*100))
+    
+    return coverage, total_return_multiple, test_strat_df, wdf
+
+###########################################################################################################################################
+
+###########################################################################################################################################
+
+###########################################################################################################################################
+
+###########################################################################################################################################
+
+
+
+
 start_time = datetime.now()
-
-start_date = datetime(1999, 1, 1)  # Change this line to change the start date you want to use. (Year, Month, Day)
-end_date = datetime.now()
-days_until_sale = 10
-
-
 sd = rs.securityData()
-greater_df_list = []
-temp_list = ['SPY','MCK','AAPL','GOOG','KHC','UTX','IWN','XLB','XLE','JNJ','BAC']
-summary_df = pd.DataFrame()
 
-exit_percent = 1
-exit_low_percent = -1
-num_top = 3
+num_top = 5
+performance = pd.DataFrame(columns=['Percentile', 'Exit_Low', 'num_top', 'coverage', 'return_multiple'])
+for percentile in np.arange(5,15):
+    for exit_low_percent in np.arange(-20,-5):
+        coverage, total_return_multiple, test_strat_df, wdf = full_func(percentile, exit_low_percent, num_top, tstart=None, tend=None, dstart=-504, dend=None)
+        s = pd.Series({'Percentile':percentile, 'Exit_Low': exit_low_percent, 'num_top':num_top, 'coverage':coverage, 'return_multiple':total_return_multiple})
+        performance = performance.append(s, ignore_index=True)
+        print('For Percentile {} and ELP {}, coverage was {}% and TRM = {}'.format(percentile, exit_low_percent, coverage, total_return_multiple))
 
-test_strat_df = pd.DataFrame.from_dict({'Ticker':'remove',
-                                        'Avg_Return_Sell_Low':[0],
-                                        'Avg_Return_Sell_High':[0],
-                                        'Stdv_Return_Sell_High':[0],
-                                        'Avg_Return_Sell_Close':[0],
-                                        'Stdv_Return_Sell_Close':[0],
-                                        'Accuracy_{}%'.format(exit_percent):[0],
-                                        'Expected_Return':[0],
-                                        'Buy_Frequency':[0]})
-timeframe = 'daily'
-
-ticker_list = sd.tickers[:]
-tlist_size = len(ticker_list)
-t3_count = int(np.floor(tlist_size/3))
-count_list = np.arange(t3_count+1)
-
-
-i = 0
-for counter in count_list:
-    #time.sleep(30)
-    if counter == t3_count+1:
-        tlist = ticker_list[-3:]
-    else:
-        tlist = ticker_list[3 * counter: 3 * counter + 3]
-    
-    #print(tlist)
-    #print('\n')
-    
-    for ticker in tlist:#sd.tickers[:500]: # this is normally ticker in sd.tickers to get all tickers on NYSE
-        if ticker in ['BF.B', 'NFX', 'PX', 'WYN', 'XY']:
-            continue
-        
-        unconstrained_data = retrieve(i, ticker, from_csv=True)
-        unconstrained_data = unconstrained_data.iloc[:,:]
-        if i == 0:
-            all_df = unconstrained_data.copy(deep=True)
-            i = 1
-        #print(type(unconstrained_data.DT[0]))
-        
-        if len(unconstrained_data) == 0:
-            #print('could not get data for {}'.format(ticker))
-            continue
-        #unconstrained_data.to_csv('{}_unc.csv'.format(ticker))
-        
-        
-        # run all strategies
-        #all_df = rs.calculate_stochastic(unconstrained_data, sd.macd_window, sd.stoch_window)
-        #all_df = rs.calc_keltner(all_df, 5, .6, 3, 1)
-        wdf = rs.ichi_open_cross(unconstrained_data, 5, exit_percent, exit_low_percent)
-        
-        #wdf.to_csv('{}_results.csv'.format(ticker))
-        
-        ldf = wdf[(wdf.buy_bool == True) & (wdf.percent_sale_bool == False)]
-        #print('ldf = {}'.format(len(ldf)))
-        #print('wdf potential buys = {}'.format(len(wdf[wdf.buy_bool])))
-        avg_best_return = np.mean(wdf.return_over_projected)
-        av_std_best_return = np.std(wdf.return_over_projected)
-        avg_close_return = np.mean(wdf.return_sold_close)
-        av_std_close_return = np.std(wdf.return_sold_close)
-        
-        try:
-            num_correct = len(wdf[(wdf.percent_sale_bool) & (wdf.buy_bool) & ~(wdf.exit_low_bool)])
-            num_loss = len(wdf[(wdf.exit_low_bool) & (wdf.buy_bool) & ~(wdf.percent_sale_bool)])
-            #print('num correct for {} = {}'.format(ticker, num_correct))
-            total = len(wdf[wdf.buy_bool])
-            #print('new total = {}'.format(total))
-            #print('total total = {}\n\n'.format(len(wdf)))
-            accsetp = num_correct / total * 100
-            accsetplow = num_loss / total * 100
-        except:
-            accsetp = 0
-            
-        exp_ret = (accsetp/100 * exit_percent) + (accsetplow/100 * exit_low_percent) + ((100-accsetp-accsetplow)/100 * np.mean(wdf.return_sold_close))
-        bf = total/len(wdf) * 100
-            
-        all_df = all_df.reset_index(drop=True)
-        all_df['{}_buy'.format(ticker)] = wdf.buy_bool
-        all_df['{}_return_multiplier'.format(ticker)] = wdf.return_as_multiple
-        
-        #returns_df = calculate_return(all_df, days_until_sale)
-    #    X = returns_df.copy(deep=True)
-    #    X = X.drop('date', axis=1)
-    #    X = X.dropna()
-    #    X = normalize_df(X)
-    #    y = X.pop('returns')
-    #    #best_scores = get_best_vars_percentile(X, y, 50)
-    #    model, score, ceofs, intercept = rs.make_model(X, y)
-    #    tts_score = rs.test_model_tts(X, y)
-        
-    #    returns_df = returns_df[(returns_df.stoch_indicator < 5) & (returns_df.stoch_indicator > 0)]
-    #    returns_df['ticker'] = ticker
-        
-    #    summary_df = pd.concat([summary_df, returns_df])
-        
-        add_df = pd.DataFrame.from_dict({'Ticker':ticker,
-                                            'Avg_Return_Sell_High':[avg_best_return],
-                                            'Stdv_Return_Sell_High':[av_std_best_return],
-                                            'Avg_Return_Sell_Close':[avg_close_return],
-                                            'Stdv_Return_Sell_Close':[av_std_close_return],
-                                            'Accuracy_{}%'.format(exit_percent):[accsetp],
-                                            'Freq_Loss_{}%'.format(exit_low_percent):[accsetplow],
-                                            'Expected_Return':[exp_ret],
-                                            'Buy_Frequency':[bf]})
-        test_strat_df = pd.concat([test_strat_df, add_df])
-        
-        #returns_df.to_csv('returns_summary_{}.csv'.format(ticker))
-    #    except:
-    #        print('Something went wrong with ticker {}'.format(ticker))
-        
-#summary_df = summary_df.drop(['DT', 'Dividend'])
-
-all_df['dates'] = all_df.DT
-keep_cols = [col for col in all_df.columns if ('_buy' in col) or ('_return' in col)]
-keep_cols.append('dates')
-all_df = all_df[keep_cols]
-#all_df = all_df.fillna(value=False)
-sum_cols_list = [col for col in all_df.columns if ('buy' in col)]
-all_df['trade_available'] = all_df[sum_cols_list].sum(axis=1)
-
-
-days_of_trading = len(all_df[all_df.trade_available > 0])
-dot_3plus = len(all_df[all_df.trade_available >= 3])
-print('there were {} potential trade days out of {} total days.  {} of those days had >= 3 trades recommended.'.format(days_of_trading, len(all_df), dot_3plus))
-print('Trading day coverage = {}%'.format((days_of_trading/len(all_df)*100)))
-test_strat_df = test_strat_df.iloc[1:,:]
-test_strat_df.reset_index()
-test_strat_df = test_strat_df.sort_values(by=['Expected_Return'], ascending=False)
-
-all_df  = calculate_exp_ret(test_strat_df, all_df, num_top)
-total_return_multiple = all_df.trade_return_multiple.product()
-print('Total Return Multiple = {}'.format(total_return_multiple))
-pos = len(all_df[all_df.trade_return_multiple > 1])
-neg = len(all_df[all_df.trade_return_multiple < 1])
-print('There were {} positive trades out of {} total.  Percent = {}%'.format(pos, days_of_trading, pos/days_of_trading*100))
-print('There were {} negative trades out of {} total.  Percent = {}%'.format(neg, days_of_trading, neg/days_of_trading*100))
-            
 end_time = datetime.now()
 
 elapsed_time = end_time - start_time
 print(elapsed_time)
+
+

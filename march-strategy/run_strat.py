@@ -289,11 +289,12 @@ def calc_ichi(df, lookback_val):
     df['min_lp'] = df.Low.rolling(lookback_val).min()
     df['avg_lp'] = (df.max_lp + df.min_lp)/2
     df['projected_val'] = df.avg_lp.shift(1)
+    df = df.drop(['max_lp', 'min_lp', 'avg_lp', 'Volume', 'Dividend', 'Split Coef'], axis=1)
     
     return df
 
 
-def ichi_open_cross(df, span, percent_prof, exit_low_percent):
+def ichi_open_cross(df, span, percentile, exit_low_percent):
     # 1. Calculate the ichimoku projections for the next week
     df = df.reset_index()
     df = calc_ichi(df, span)
@@ -313,116 +314,68 @@ def ichi_open_cross(df, span, percent_prof, exit_low_percent):
     df['loss_under_projected'] = (df.next_low - df.projected_val) / df.projected_val * 100
     
     # 5. Calculate return if sold at close
-    df['close_of_week'] = df.Close.shift(-span)
+    df['close_of_week'] = df.Close.shift(-span+1)
     df['return_sold_close'] = (df.close_of_week - df.projected_val) / df.projected_val * 100
     
     # 6. Calculate whether price gets above a certain % of projected
-    df['percent_sale_bool'] = df.return_over_projected > percent_prof
-    df['half_percent_sale_bool'] = df.return_over_projected > percent_prof/2
-    df['quarter_percent_sale_bool'] = df.return_over_projected > percent_prof/4
+    df['buy_bool'] = (df.Open < df.projected_val) & (df.next_high >= df.projected_val)# & (df.prev_close > df.projected_val)
+    
+    percentile_val = np.nanpercentile(df.return_over_projected[df.buy_bool == True], percentile)
+    print('{}th %le = {}\n'.format(percentile ,percentile_val))
+    df['high_percentile'] = df.projected_val * (1 + (percentile_val/100))
+    df['stop_loss_val'] = df.projected_val * (1 + (exit_low_percent/100))
+    df['percent_sale_bool'] = df.return_over_projected > percentile_val
     
     # 7. Find where open low and reach sale happens
-    df['buy_bool'] = (df.Open < df.projected_val) & (df.next_high >= df.projected_val)# & (df.prev_close > df.projected_val)
+    
     df['exit_low_bool'] = df.loss_under_projected < exit_low_percent
     df['Loss_on_Low'] = (df.next_low - df.projected_val) / df.projected_val * 100
     
     
-    df = calc_return(df, percent_prof, exit_low_percent, span)
+    df = calc_return(df, percentile_val, exit_low_percent, span)
             
     
     # . Find where the security opened the next week below the projected price and had a high above the projected price
     #df = df[df.rose_to_projected]  # df[(df.Open < df.projected_val) & (df.next_high >= df.projected_val)]
     
-    return df
+    return df, percentile_val
 
 
 def calc_return(df, percent_prof, exit_low_percent, span):
     df['returns'] = 0.0
     for index, row in df.iterrows():
-        if row.buy_bool:    #There is a buy
-            full_high = row.projected_val * (1+(percent_prof/100))
-            quarter_high = row.projected_val * (1+((percent_prof/4)/100))      
-            #print('\nfull_high = {}'.format(full_high))
-            #print('quarter_high = {}'.format(quarter_high))
+        if row.buy_bool:
+            if row.percent_sale_bool & row.exit_low_bool:    # mixed case
+                current_date = row.DT
+                next_high = row.next_high
+                next_low = row.next_low
+                sub_df = df.iloc[index:index+span,:]
+                date_high = sub_df[sub_df.High == next_high].DT
+                date_low = sub_df[sub_df.Low == next_low].DT
+                time_to_high = (date_high - current_date).iloc[0].days
+                time_to_low = (date_low - current_date).iloc[0].days
+                
+                
+                if time_to_high < time_to_low:
+                    df.iloc[index, -1] = percent_prof
+                elif time_to_high == time_to_low:
+                    df.iloc[index, -1] = 0.0
+                else:
+                    df.iloc[index, -1] = exit_low_percent
+                    
+            elif row.percent_sale_bool &  ~row.exit_low_bool:  # sell high case
+                #print('high')
+                df.iloc[index, -1] = percent_prof
             
-            if (not row.half_percent_sale_bool) & (not row.exit_low_bool):
-                #print('end of week profit in row {}'.format(index))
-                df.loc[index, 'returns'] = row.return_sold_close
-            elif (not row.half_percent_sale_bool) & (row.exit_low_bool):
-                #print('exit low profit in row {}'.format(index))
-                df.loc[index, 'returns'] = exit_low_percent
-            else:   # It reached the half percent ladder
-                # Create week long sub_df
-                week_df = df.iloc[index:index+span,:]
-                week_df = week_df.reset_index()
-                crosses_half_idx = week_df.index[week_df.High > percent_prof/2].tolist()[0]
-                week_after_cross_df = week_df.iloc[crosses_half_idx:, :]
-                
-#                print(np.max(week_after_cross_df.High))
-#                print(np.min(week_after_cross_df.Low))
-#                print(np.max(week_after_cross_df.High) > full_high)
-#                print(np.min(week_after_cross_df.Low) < quarter_high)
-                
-                if (np.max(week_after_cross_df.High) > full_high) & (np.min(week_after_cross_df.Low) > quarter_high):   #Reaches full high and does not fall below quarter high
-                    #print('full profit in row {}'.format(index))
-                    df.loc[index, 'returns'] = percent_prof
-                elif (np.max(week_after_cross_df.High) > full_high) &  (np.min(week_after_cross_df.Low) < (quarter_high)): # Reaches full high and also falls below quarter low
-                    idx_full_high = week_after_cross_df.index[week_after_cross_df.High > full_high].tolist()[0]
-                    idx_quarter_high = week_after_cross_df.index[week_after_cross_df.Low < quarter_high].tolist()[0]
-                    #print('idx fh = {}'.format(idx_full_high))
-                    #print('idx qh = {}'.format(idx_quarter_high))
-                    if idx_full_high < idx_quarter_high:
-                        print('full profit in row {}'.format(index))
-                        df.loc[index, 'returns'] = percent_prof
-                    elif idx_full_high > idx_quarter_high:
-                        #print('quarter profit in row {}'.format(index))
-                        df.loc[index, 'returns'] = percent_prof/4
-                    else:
-                        #print('quarter profit in row {}'.format(index))
-                        df.loc[index, 'returns'] = percent_prof/4   
-                elif (not (np.max(week_after_cross_df.High) > full_high)) &  (np.min(week_after_cross_df.Low) < (quarter_high)):
-                    #print('quarter profit in row {}'.format(index))
-                    df.loc[index, 'returns'] = percent_prof/4
-                else:   # Reached half, but did not fall below a quarter or rise to full.  Sell out end of week
-                    #print('end of week profits in row {}'.format(index))
-                    df.loc[index, 'returns'] = row.return_sold_close
-        else:
-            df.loc[index, 'returns'] = np.nan
-
-#        if row.percent_sale_bool & row.exit_low_bool & row.buy_bool:    # mixed case
-#            current_date = row.DT
-#            next_high = row.next_high
-#            next_low = row.next_low
-#            sub_df = df.iloc[index:index+span,:]
-#            date_high = sub_df[sub_df.High == next_high].DT
-#            date_low = sub_df[sub_df.Low == next_low].DT
-#            time_to_high = (date_high - current_date).iloc[0].days
-#            time_to_low = (date_low - current_date).iloc[0].days
-#            
-#            
-#            if time_to_high < time_to_low:
-#                df.iloc[index, -1] = percent_prof
-#            elif time_to_high == time_to_low:
-#                df.iloc[index, -1] = 0
-#            else:
-#                df.iloc[index, -1] = exit_low_percent
-#                
-#        elif row.percent_sale_bool & ~row.exit_low_bool & row.buy_bool:  # sell high case
-#            #print('high')
-#            df.iloc[index, -1] = percent_prof
-#        
-#        elif ~row.percent_sale_bool & row.exit_low_bool & row.buy_bool & ~row.quarter_percent_sale_bool :
-#            #print('low')
-#            df.iloc[index, -1] = exit_low_percent
+            elif ~row.percent_sale_bool & row.exit_low_bool:
+                #print('low')
+                df.iloc[index, -1] = exit_low_percent
         
-#        elif ~row.percent_sale_bool & ~row.exit_low_bool & row.buy_bool & row.half_percent_sale_bool:
-#            #print('close')
-#            df.iloc[index, -1] = percent_prof/2
-#        elif ~row.percent_sale_bool & ~row.exit_low_bool & row.buy_bool & ~row.half_percent_sale_bool & row.quarter_percent_sale_bool:
-#            #print('close')
-#            df.iloc[index, -1] = percent_prof/4
-#        elif ~row.percent_sale_bool & ~row.exit_low_bool & row.buy_bool & ~row.half_percent_sale_bool & ~row.quarter_percent_sale_bool:
-#            df.iloc[index, -1] = row.return_sold_close
+            else:
+                #print('return sold close')
+                df.iloc[index, -1] = row.return_sold_close
+                
+
             
     df['return_as_multiple'] = 1 + (df.returns / 100)
     df.return_as_multiple = df.return_as_multiple.replace(1.00, np.nan)
